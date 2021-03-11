@@ -7,8 +7,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,7 +58,7 @@ func init() {
 	output = cmd.PersistentFlags().StringP(
 		"output",
 		"o",
-		"email.epub",
+		"email-to-epub.epub",
 		"output filename",
 	)
 	title = cmd.PersistentFlags().StringP(
@@ -97,7 +99,7 @@ func run(c *cobra.Command, args []string) error {
 
 	book := epub.NewEpub(*title)
 	{
-		book.SetAuthor("email-to-epub")
+		book.SetAuthor("Email Epub")
 		book.SetDescription(fmt.Sprintf("email archive generated at %s", time.Now().Format("2006-01-02")))
 	}
 
@@ -159,10 +161,10 @@ func run(c *cobra.Command, args []string) error {
 				return
 			}
 
-			imageRef, exist := images[src]
+			_, exist = images[src]
 			if !exist {
 				if flagVerbose {
-					log.Printf("download %s", src)
+					log.Printf("save %s", src)
 				}
 
 				// download
@@ -194,19 +196,20 @@ func run(c *cobra.Command, args []string) error {
 					log.Printf("cannot add image %s", err)
 					return
 				}
-				imageRef = localRef
+
+				images[src] = localRef
 			}
-			selection.SetAttr("src", imageRef)
+			selection.SetAttr("src", images[src])
 		})
 
-		body, err := doc.Find("body").Html()
+		body, err := doc.Find("body").PrependHtml(info(mail)).Html()
 		if err != nil {
 			return fmt.Errorf("cannot generate body: %s", err)
 		}
 
 		// decode subject
 		subject := mail.Subject
-		decoded, err := decodeSubject(subject)
+		decoded, err := decodeWord(subject)
 		if err == nil {
 			subject = decoded
 		}
@@ -223,6 +226,31 @@ func run(c *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func info(email *email.Email) string {
+	var headers []string
+	var header = func(label, body string) string {
+		body, _ = decodeWord(body)
+		label, body = html.EscapeString(label), html.EscapeString(body)
+		return fmt.Sprintf(`<p style="color:#999; margin: 8px;">%s:&nbsp;<span style="color:#666; text-decoration:none;">%s</span></p>`, label, body)
+	}
+	if len(email.ReplyTo) > 0 {
+		headers = append(headers, header("ReplyTo", strings.Join(email.ReplyTo, ", ")))
+	}
+	headers = append(headers, header("From", email.From))
+	headers = append(headers, header("To", strings.Join(email.To, ", ")))
+	if len(email.Bcc) > 0 {
+		headers = append(headers, header("Bcc", strings.Join(email.Bcc, ", ")))
+	}
+	if len(email.Cc) > 0 {
+		headers = append(headers, header("Cc", strings.Join(email.Cc, ", ")))
+	}
+	headers = append(headers, header("Subject", email.Subject))
+
+	var box = `<div style="padding: 8px;">%s</div>`
+
+	return fmt.Sprintf(box, strings.Join(headers, ""))
 }
 
 func download(path string, src string) (err error) {
@@ -288,22 +316,27 @@ func download(path string, src string) (err error) {
 }
 
 // decode RFC 2047
-func decodeSubject(subj string) (string, error) {
-	is2047 := strings.HasPrefix(subj, "=?") && strings.HasSuffix(subj, "?=")
-	if is2047 {
-		is2047 = strings.Contains(subj, "?Q?") || strings.Contains(subj, "?B?")
+func decodeWord(word string) (string, error) {
+	isRFC2047 := strings.HasPrefix(word, "=?") && strings.Contains(word, "?=")
+	if isRFC2047 {
+		isRFC2047 = strings.Contains(word, "?Q?") || strings.Contains(word, "?B?")
 	}
-	if !is2047 {
-		return subj, nil
-	}
-
-	comps := strings.Split(subj, "?")
-	if len(comps) != 5 {
-		return subj, nil
+	if !isRFC2047 {
+		return word, nil
 	}
 
-	dec, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(comps[3], "="))
-	return string(dec), err
+	comps := strings.Split(word, "?")
+	if len(comps) < 5 {
+		return word, nil
+	}
+
+	if comps[2] == "B" {
+		b64s := strings.TrimRight(comps[3], "=")
+		text, _ := base64.RawURLEncoding.DecodeString(b64s)
+		comps[3] = base64.StdEncoding.EncodeToString(text)
+	}
+
+	return new(mime.WordDecoder).DecodeHeader(strings.Join(comps, "?"))
 }
 
 func md5str(s string) string {
