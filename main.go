@@ -12,6 +12,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,11 +119,11 @@ func run(c *cobra.Command, args []string) error {
 			_ = temp.Close()
 			*cover = temp.Name()
 		}
-		mime, err := mimetype.DetectFile(*cover)
+		cmime, err := mimetype.DetectFile(*cover)
 		if err != nil {
 			return fmt.Errorf("cannot detect cover mime type %s", err)
 		}
-		coverRef, err := book.AddImage(*cover, "epubCover"+mime.Extension())
+		coverRef, err := book.AddImage(*cover, "epubCover"+cmime.Extension())
 		if err != nil {
 			return fmt.Errorf("cannot add cover %s", err)
 		}
@@ -149,6 +150,7 @@ func run(c *cobra.Command, args []string) error {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
+		doc = cleanDocument(doc)
 		doc.Find("img").Each(func(i int, selection *goquery.Selection) {
 			selection.RemoveAttr("loading")
 			selection.RemoveAttr("srcset")
@@ -169,8 +171,13 @@ func run(c *cobra.Command, args []string) error {
 				}
 
 				// download
-				target := filepath.Join(imagesCacheDirectory, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(src)))
-				err := download(target, src)
+				u, err := url.Parse(src)
+				if err != nil {
+					log.Printf("parse %s fail: %s", src, err)
+					return
+				}
+				target := filepath.Join(imagesCacheDirectory, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(u.Path)))
+				err = download(target, src)
 				if err != nil {
 					log.Printf("download %s fail: %s", src, err)
 					return
@@ -183,6 +190,7 @@ func run(c *cobra.Command, args []string) error {
 					return
 				}
 				if !strings.HasPrefix(imime.String(), "image") {
+					selection.Remove()
 					log.Printf("mime of %s is %s instead of images", src, imime.String())
 					return
 				}
@@ -203,21 +211,19 @@ func run(c *cobra.Command, args []string) error {
 			selection.SetAttr("src", images[src])
 		})
 
-		headers := info(mail)
-		body := cleanBody(doc.Find("body"))
-		content, err := body.PrependHtml(headers).Html()
+		body, err := doc.Find("body").PrependHtml(info(mail)).Html()
 		if err != nil {
 			return fmt.Errorf("cannot generate body: %s", err)
 		}
 
 		// decode subject
 		subject := mail.Subject
-		decoded, err := decodeWord(subject)
+		decoded, err := decodeRFC2047(subject)
 		if err == nil {
 			subject = decoded
 		}
 
-		_, err = book.AddSection(content, subject, "", "")
+		_, err = book.AddSection(body, subject, "", "")
 		if err != nil {
 			return fmt.Errorf("cannot add section %s", err)
 		}
@@ -234,7 +240,7 @@ func run(c *cobra.Command, args []string) error {
 func info(email *email.Email) string {
 	var headers []string
 	var header = func(label, body string) string {
-		body, _ = decodeWord(body)
+		body, _ = decodeRFC2047(body)
 		label, body = html.EscapeString(label), html.EscapeString(body)
 		return fmt.Sprintf(`<p style="color:#999; margin: 8px;">%s:&nbsp;<span style="color:#666; text-decoration:none;">%s</span></p>`, label, body)
 	}
@@ -318,8 +324,7 @@ func download(path string, src string) (err error) {
 	return
 }
 
-// decode RFC 2047
-func decodeWord(word string) (string, error) {
+func decodeRFC2047(word string) (string, error) {
 	isRFC2047 := strings.HasPrefix(word, "=?") && strings.Contains(word, "?=")
 	if isRFC2047 {
 		isRFC2047 = strings.Contains(word, "?Q?") || strings.Contains(word, "?B?")
@@ -342,11 +347,11 @@ func decodeWord(word string) (string, error) {
 	return new(mime.WordDecoder).DecodeHeader(strings.Join(comps, "?"))
 }
 
-func cleanBody(body *goquery.Selection) *goquery.Selection {
-	// inoreader ads
-	body.Find(`div:contains("ads from inoreader")`).Closest("center").Remove()
+func cleanDocument(doc *goquery.Document) *goquery.Document {
+	// remove inoreader ads
+	doc.Find("body").Find(`div:contains("ads from inoreader")`).Closest("center").Remove()
 
-	return body
+	return doc
 }
 
 func md5str(s string) string {
