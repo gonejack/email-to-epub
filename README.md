@@ -10,7 +10,7 @@ Command line tool for converting emails to epub.
 ### Usage
 ```
 Usage:
-  email-to-epub [-o output] [-title title] [-cover cover] *.eml
+  email-to-epub [-o output] [--title title] [--cover cover] *.eml
 
 Flags:
   -o, --output string   output filename (default "email.epub")
