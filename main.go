@@ -80,6 +80,7 @@ func init() {
 		false,
 		"verbose",
 	)
+	log.SetOutput(os.Stdout)
 }
 
 func run(c *cobra.Command, args []string) error {
@@ -202,7 +203,9 @@ func run(c *cobra.Command, args []string) error {
 			selection.SetAttr("src", images[src])
 		})
 
-		body, err := doc.Find("body").PrependHtml(info(mail)).Html()
+		headers := info(mail)
+		body := cleanBody(doc.Find("body"))
+		content, err := body.PrependHtml(headers).Html()
 		if err != nil {
 			return fmt.Errorf("cannot generate body: %s", err)
 		}
@@ -214,7 +217,7 @@ func run(c *cobra.Command, args []string) error {
 			subject = decoded
 		}
 
-		_, err = book.AddSection(body, subject, "", "")
+		_, err = book.AddSection(content, subject, "", "")
 		if err != nil {
 			return fmt.Errorf("cannot add section %s", err)
 		}
@@ -337,6 +340,13 @@ func decodeWord(word string) (string, error) {
 	}
 
 	return new(mime.WordDecoder).DecodeHeader(strings.Join(comps, "?"))
+}
+
+func cleanBody(body *goquery.Selection) *goquery.Selection {
+	// inoreader ads
+	body.Find(`div:contains("ads from inoreader")`).Closest("center").Remove()
+
+	return body
 }
 
 func md5str(s string) string {
