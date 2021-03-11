@@ -58,7 +58,7 @@ func init() {
 	output = cmd.PersistentFlags().StringP(
 		"output",
 		"o",
-		"email-to-epub.epub",
+		"output.epub",
 		"output filename",
 	)
 	title = cmd.PersistentFlags().StringP(
