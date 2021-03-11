@@ -13,7 +13,7 @@ Usage:
   email-to-epub [-o output] [--title title] [--cover cover] *.eml
 
 Flags:
-  -o, --output string   output filename (default "email.epub")
+  -o, --output string   output filename (default "output.epub")
       --title string    epub title (default "Email")
       --cover string    cover image
   -v, --verbose         verbose
