@@ -1,6 +1,6 @@
 # email-to-epub
 
-Command line tool to email(s) to epub.
+Command line tool for converting emails to epub.
 
 ### Install
 ```shell

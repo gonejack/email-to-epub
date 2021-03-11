@@ -44,7 +44,7 @@ var (
 	client = http.Client{}
 	cmd    = &cobra.Command{
 		Use:   "email-to-epub [-o output] [-title title] [-cover cover] *.eml",
-		Short: "Command line tool to convert email(s) to epub.",
+		Short: "Command line tool for converting emails to epub.",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := run(cmd, args); err != nil {
 				log.Fatal(err)
