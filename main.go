@@ -30,13 +30,14 @@ import (
 )
 
 var (
-	imagesCacheDirectory = "images"
+	imageCacheDir = "images"
 
 	//go:embed cover.png
 	defaultCover []byte
 
-	title  *string
 	cover  *string
+	title  *string
+	author *string
 	output *string
 
 	flagVerbose = false
@@ -56,23 +57,30 @@ var (
 func init() {
 	cmd.Flags().SortFlags = false
 	cmd.PersistentFlags().SortFlags = false
+
+	cover = cmd.PersistentFlags().StringP(
+		"cover",
+		"",
+		"",
+		"epub cover image",
+	)
+	title = cmd.PersistentFlags().StringP(
+		"title",
+		"",
+		"Emails",
+		"epub title",
+	)
+	author = cmd.PersistentFlags().StringP(
+		"author",
+		"",
+		"Email to Epub",
+		"epub author",
+	)
 	output = cmd.PersistentFlags().StringP(
 		"output",
 		"o",
 		"output.epub",
 		"output filename",
-	)
-	title = cmd.PersistentFlags().StringP(
-		"title",
-		"",
-		"Email",
-		"epub title",
-	)
-	cover = cmd.PersistentFlags().StringP(
-		"cover",
-		"",
-		"",
-		"cover image",
 	)
 	cmd.PersistentFlags().BoolVarP(
 		&flagVerbose,
@@ -89,20 +97,20 @@ func run(c *cobra.Command, args []string) error {
 		return errors.New("no eml given")
 	}
 
-	err := os.MkdirAll(imagesCacheDirectory, 0777)
+	err := os.MkdirAll(imageCacheDir, 0777)
 	if err != nil {
 		return fmt.Errorf("cannot make cache dir %s", err)
 	}
 
 	_, err = os.Stat(*output)
 	if !os.IsNotExist(err) {
-		return fmt.Errorf("output target %s exist", *output)
+		return fmt.Errorf("output file %s exist", *output)
 	}
 
 	book := epub.NewEpub(*title)
 	{
-		book.SetAuthor("Email Epub")
-		book.SetDescription(fmt.Sprintf("email archive generated at %s", time.Now().Format("2006-01-02")))
+		book.SetAuthor(*author)
+		book.SetDescription(fmt.Sprintf("Email archive generated at %s with github.com/gonejack/email-to-epub", time.Now().Format("2006-01-02")))
 	}
 
 	// set cover
@@ -131,8 +139,10 @@ func run(c *cobra.Command, args []string) error {
 	}
 
 	// download images
-	images := make(map[string]string)
-	for _, eml := range args {
+	cache := make(map[string]string)
+	for index, eml := range args {
+		index = index + 1
+
 		log.Printf("add %s", eml)
 
 		file, err := os.Open(eml)
@@ -164,7 +174,7 @@ func run(c *cobra.Command, args []string) error {
 				return
 			}
 
-			_, exist = images[src]
+			_, exist = cache[src]
 			if !exist {
 				if flagVerbose {
 					log.Printf("save %s", src)
@@ -176,15 +186,15 @@ func run(c *cobra.Command, args []string) error {
 					log.Printf("parse %s fail: %s", src, err)
 					return
 				}
-				target := filepath.Join(imagesCacheDirectory, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(u.Path)))
-				err = download(target, src)
+				downloadFile := filepath.Join(imageCacheDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(u.Path)))
+				err = download(downloadFile, src)
 				if err != nil {
 					log.Printf("download %s fail: %s", src, err)
 					return
 				}
 
 				// check mime
-				imime, err := mimetype.DetectFile(target)
+				imime, err := mimetype.DetectFile(downloadFile)
 				if err != nil {
 					log.Printf("cannot detect image mime of %s: %s", src, err)
 					return
@@ -196,19 +206,19 @@ func run(c *cobra.Command, args []string) error {
 				}
 
 				// add image
-				localName := filepath.Base(target)
-				if !strings.HasSuffix(localName, imime.Extension()) {
-					localName += imime.Extension()
+				internalName := filepath.Base(downloadFile)
+				if !strings.HasSuffix(internalName, imime.Extension()) {
+					internalName += imime.Extension()
 				}
-				localRef, err := book.AddImage(target, localName)
+				internalRef, err := book.AddImage(downloadFile, internalName)
 				if err != nil {
 					log.Printf("cannot add image %s", err)
 					return
 				}
 
-				images[src] = localRef
+				cache[src] = internalRef
 			}
-			selection.SetAttr("src", images[src])
+			selection.SetAttr("src", cache[src])
 		})
 
 		body, err := doc.Find("body").PrependHtml(info(mail)).Html()
@@ -216,14 +226,16 @@ func run(c *cobra.Command, args []string) error {
 			return fmt.Errorf("cannot generate body: %s", err)
 		}
 
-		// decode subject
-		subject := mail.Subject
-		decoded, err := decodeRFC2047(subject)
+		// decode title
+		title := mail.Subject
+		decoded, err := decodeRFC2047(title)
 		if err == nil {
-			subject = decoded
+			title = decoded
 		}
+		title = fmt.Sprintf("%d. %s", index, title)
+		filename := fmt.Sprintf("page%d.html", index)
 
-		_, err = book.AddSection(body, subject, "", "")
+		_, err = book.AddSection(body, title, filename, "")
 		if err != nil {
 			return fmt.Errorf("cannot add section %s", err)
 		}
@@ -239,10 +251,10 @@ func run(c *cobra.Command, args []string) error {
 
 func info(email *email.Email) string {
 	var headers []string
-	var header = func(label, body string) string {
-		body, _ = decodeRFC2047(body)
-		label, body = html.EscapeString(label), html.EscapeString(body)
-		return fmt.Sprintf(`<p style="color:#999; margin: 8px;">%s:&nbsp;<span style="color:#666; text-decoration:none;">%s</span></p>`, label, body)
+	var header = func(label, text string) string {
+		text, _ = decodeRFC2047(text)
+		label, text = html.EscapeString(label), html.EscapeString(text)
+		return fmt.Sprintf(`<p style="color:#999; margin: 8px;">%s:&nbsp;<span style="color:#666; text-decoration:none;">%s</span></p>`, label, text)
 	}
 	if len(email.ReplyTo) > 0 {
 		headers = append(headers, header("ReplyTo", strings.Join(email.ReplyTo, ", ")))
@@ -256,6 +268,10 @@ func info(email *email.Email) string {
 		headers = append(headers, header("Cc", strings.Join(email.Cc, ", ")))
 	}
 	headers = append(headers, header("Subject", email.Subject))
+
+	if date := email.Headers.Get("Date"); date != "" {
+		headers = append(headers, header("Date", date))
+	}
 
 	var box = `<div style="padding: 8px;">%s</div>`
 
@@ -278,29 +294,25 @@ func download(path string, src string) (err error) {
 		}
 	}
 
-	req, err := http.NewRequestWithContext(timeout, http.MethodGet, src, nil)
-	if err != nil {
-		return
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("response status code %d invalid", resp.StatusCode)
-	}
-
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return
 	}
 	defer file.Close()
 
+	request, err := http.NewRequestWithContext(timeout, http.MethodGet, src, nil)
+	if err != nil {
+		return
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return
+	}
+	defer response.Body.Close()
+
 	var written int64
 	if flagVerbose {
-		bar := progressbar.NewOptions64(resp.ContentLength,
+		bar := progressbar.NewOptions64(response.ContentLength,
 			progressbar.OptionSetTheme(progressbar.Theme{Saucer: "=", SaucerPadding: ".", BarStart: "|", BarEnd: "|"}),
 			progressbar.OptionSetWidth(10),
 			progressbar.OptionSpinnerType(11),
@@ -312,13 +324,17 @@ func download(path string, src string) (err error) {
 			progressbar.OptionClearOnFinish(),
 		)
 		defer bar.Clear()
-		written, err = io.Copy(io.MultiWriter(file, bar), resp.Body)
+		written, err = io.Copy(io.MultiWriter(file, bar), response.Body)
 	} else {
-		written, err = io.Copy(file, resp.Body)
+		written, err = io.Copy(file, response.Body)
 	}
 
-	if err == nil && written < resp.ContentLength {
-		err = fmt.Errorf("expected %s but downloaded %s", humanize.Bytes(uint64(resp.ContentLength)), humanize.Bytes(uint64(written)))
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return fmt.Errorf("response status code %d invalid", response.StatusCode)
+	}
+
+	if err == nil && written < response.ContentLength {
+		err = fmt.Errorf("expected %s but downloaded %s", humanize.Bytes(uint64(response.ContentLength)), humanize.Bytes(uint64(written)))
 	}
 
 	return
