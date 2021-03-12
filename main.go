@@ -131,7 +131,7 @@ func run(c *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("cannot detect cover mime type %s", err)
 		}
-		coverRef, err := book.AddImage(*cover, "epubCover"+cmime.Extension())
+		coverRef, err := book.AddImage(*cover, "epub-cover"+cmime.Extension())
 		if err != nil {
 			return fmt.Errorf("cannot add cover %s", err)
 		}
@@ -354,7 +354,7 @@ func decodeRFC2047(word string) (string, error) {
 		return word, nil
 	}
 
-	if comps[2] == "B" {
+	if comps[2] == "B" && strings.HasSuffix(comps[3], "=") {
 		b64s := strings.TrimRight(comps[3], "=")
 		text, _ := base64.RawURLEncoding.DecodeString(b64s)
 		comps[3] = base64.StdEncoding.EncodeToString(text)
