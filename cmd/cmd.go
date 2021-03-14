@@ -229,6 +229,10 @@ func (c *EmailToEpub) changeRef(img *goquery.Selection, attachments, downloads m
 	case strings.HasPrefix(src, "http"):
 		localFile := downloads[src]
 
+		if c.Verbose {
+			log.Printf("replace %s as %s", src, localFile)
+		}
+
 		// check mime
 		fmime, err := mimetype.DetectFile(localFile)
 		if err != nil {
@@ -252,9 +256,6 @@ func (c *EmailToEpub) changeRef(img *goquery.Selection, attachments, downloads m
 			return
 		}
 
-		if c.Verbose {
-			log.Printf("replace %s as %s", src, downloads[src])
-		}
 		img.SetAttr("src", internalRef)
 	case strings.HasPrefix(src, "cid:"):
 		contentId := strings.TrimPrefix(src, "cid:")
@@ -265,15 +266,16 @@ func (c *EmailToEpub) changeRef(img *goquery.Selection, attachments, downloads m
 			return
 		}
 
+		if c.Verbose {
+			log.Printf("replace %s as %s", src, localFile)
+		}
+
 		internalRef, err := c.book.AddImage(localFile, fmt.Sprintf("attachment_%s", contentId))
 		if err != nil {
 			log.Printf("cannot add image %s", err)
 			return
 		}
 
-		if c.Verbose {
-			log.Printf("replace %s as %s", src, internalRef)
-		}
 		img.SetAttr("src", internalRef)
 	default:
 		log.Printf("unsupported image reference[src=%s]", src)
