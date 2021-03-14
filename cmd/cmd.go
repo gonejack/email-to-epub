@@ -72,29 +72,31 @@ func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
 			return err
 		}
 
-		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(mail.HTML))
-		if err != nil {
-			return fmt.Errorf("cannot parse HTML: %s", err)
-		}
-		doc = c.cleanDoc(doc)
-
 		attachments, err := c.extractAttachments(mail)
 		if err != nil {
 			return fmt.Errorf("cannot extract attachments %s", err)
 		}
-		downloadImages := c.downloadImages(doc)
 
-		doc.Find("img").Each(func(i int, img *goquery.Selection) {
-			c.changeRef(img, attachments, downloadImages)
+		document, err := goquery.NewDocumentFromReader(bytes.NewReader(mail.HTML))
+		if err != nil {
+			return fmt.Errorf("cannot parse HTML: %s", err)
+		}
+
+		document = c.cleanDoc(document)
+		downloads := c.downloadImages(document)
+
+		document.Find("img").Each(func(i int, img *goquery.Selection) {
+			c.changeRef(img, attachments, downloads)
 		})
 
-		body, err := doc.Find("body").PrependHtml(c.mainInfo(mail)).Html()
+		info := c.mainInfo(mail)
+		body, err := document.Find("body").PrependHtml(info).Html()
 		if err != nil {
 			return fmt.Errorf("cannot generate body: %s", err)
 		}
+
 		title := fmt.Sprintf("%d. %s", index, c.mailTitle(mail))
 		filename := fmt.Sprintf("page%d.html", index)
-
 		_, err = c.book.AddSection(body, title, filename, "")
 		if err != nil {
 			return fmt.Errorf("cannot add section %s", err)
@@ -141,11 +143,11 @@ func (c *EmailToEpub) setCover() (err error) {
 		c.Cover = temp.Name()
 	}
 
-	mim, err := mimetype.DetectFile(c.Cover)
+	fmime, err := mimetype.DetectFile(c.Cover)
 	if err != nil {
 		return fmt.Errorf("cannot detect cover mime type %s", err)
 	}
-	coverRef, err := c.book.AddImage(c.Cover, "epub-cover"+mim.Extension())
+	coverRef, err := c.book.AddImage(c.Cover, "epub-cover"+fmime.Extension())
 	if err != nil {
 		return fmt.Errorf("cannot add cover %s", err)
 	}
@@ -228,21 +230,21 @@ func (c *EmailToEpub) changeRef(img *goquery.Selection, attachments, downloads m
 		localFile := downloads[src]
 
 		// check mime
-		mime, err := mimetype.DetectFile(localFile)
+		fmime, err := mimetype.DetectFile(localFile)
 		if err != nil {
 			log.Printf("cannot detect image mime of %s: %s", src, err)
 			return
 		}
-		if !strings.HasPrefix(mime.String(), "image") {
+		if !strings.HasPrefix(fmime.String(), "image") {
 			img.Remove()
-			log.Printf("mime of %s is %s instead of images", src, mime.String())
+			log.Printf("mime of %s is %s instead of images", src, fmime.String())
 			return
 		}
 
 		// add image
 		internalName := filepath.Base(localFile)
-		if !strings.HasSuffix(internalName, mime.Extension()) {
-			internalName += mime.Extension()
+		if !strings.HasSuffix(internalName, fmime.Extension()) {
+			internalName += fmime.Extension()
 		}
 		internalRef, err := c.book.AddImage(localFile, internalName)
 		if err != nil {
