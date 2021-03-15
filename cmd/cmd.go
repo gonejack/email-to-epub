@@ -344,23 +344,26 @@ func (c *EmailToEpub) download(path string, src string) (err error) {
 }
 
 func (_ *EmailToEpub) mainInfo(email *email.Email) string {
-	var headers []string
 	var header = func(label, text string) string {
 		text, _ = decodeRFC2047(text)
 		label, text = html.EscapeString(label), html.EscapeString(text)
 		return fmt.Sprintf(`<p style="color:#999; margin: 8px;">%s:&nbsp;<span style="color:#666; text-decoration:none;">%s</span></p>`, label, text)
 	}
+
+	var headers []string
+	headers = append(headers, header("From", email.From))
+	headers = append(headers, header("To", strings.Join(email.To, ", ")))
+
 	if len(email.ReplyTo) > 0 {
 		headers = append(headers, header("ReplyTo", strings.Join(email.ReplyTo, ", ")))
 	}
-	headers = append(headers, header("From", email.From))
-	headers = append(headers, header("To", strings.Join(email.To, ", ")))
 	if len(email.Bcc) > 0 {
 		headers = append(headers, header("Bcc", strings.Join(email.Bcc, ", ")))
 	}
 	if len(email.Cc) > 0 {
 		headers = append(headers, header("Cc", strings.Join(email.Cc, ", ")))
 	}
+
 	headers = append(headers, header("Subject", email.Subject))
 
 	if date := email.Headers.Get("Date"); date != "" {
