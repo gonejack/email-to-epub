@@ -223,6 +223,9 @@ func (c *EmailToEpub) extractAttachments(mail *email.Email) (attachments map[str
 	return
 }
 func (c *EmailToEpub) changeRef(img *goquery.Selection, attachments, downloads map[string]string) {
+	img.RemoveAttr("loading")
+	img.RemoveAttr("srcset")
+
 	src, _ := img.Attr("src")
 
 	switch {
@@ -383,11 +386,6 @@ func (_ *EmailToEpub) mailTitle(mail *email.Email) string {
 	return title
 }
 func (_ *EmailToEpub) cleanDoc(doc *goquery.Document) *goquery.Document {
-	doc.Find("img").Each(func(i int, img *goquery.Selection) {
-		img.RemoveAttr("loading")
-		img.RemoveAttr("srcset")
-	})
-
 	// remove inoreader ads
 	doc.Find("body").Find(`div:contains("ads from inoreader")`).Closest("center").Remove()
 
