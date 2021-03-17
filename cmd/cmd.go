@@ -217,7 +217,10 @@ func (c *EmailToEpub) extractAttachments(mail *email.Email) (attachments map[str
 			log.Printf("cannot extact image %s", a.Filename)
 			continue
 		}
-		attachments[a.Header.Get("Content-ID")] = saveFile
+		cid := a.Header.Get("Content-ID")
+		cid = strings.TrimPrefix(cid, "<")
+		cid = strings.TrimSuffix(cid, ">")
+		attachments[cid] = saveFile
 		attachments[a.Filename] = saveFile
 	}
 	return
@@ -269,11 +272,23 @@ func (c *EmailToEpub) changeRef(img *goquery.Selection, attachments, downloads m
 			return
 		}
 
+		// check mime
+		fmime, err := mimetype.DetectFile(localFile)
+		if err != nil {
+			log.Printf("cannot detect image mime of %s: %s", src, err)
+			return
+		}
+
 		if c.Verbose {
 			log.Printf("replace %s as %s", src, localFile)
 		}
 
-		internalRef, err := c.book.AddImage(localFile, fmt.Sprintf("attachment_%s", contentId))
+		// add image
+		internalName := filepath.Base(fmt.Sprintf("attachment_%s", contentId))
+		if !strings.HasSuffix(internalName, fmime.Extension()) {
+			internalName += fmime.Extension()
+		}
+		internalRef, err := c.book.AddImage(localFile, internalName)
 		if err != nil {
 			log.Printf("cannot add image %s", err)
 			return

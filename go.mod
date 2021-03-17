@@ -11,3 +11,5 @@ require (
 	github.com/schollz/progressbar/v3 v3.7.4
 	github.com/spf13/cobra v1.1.3
 )
+
+replace github.com/jordan-wright/email => github.com/gonejack/email v1.0.1
