@@ -160,6 +160,7 @@ func (c *EmailToEpub) openEmail(eml string) (*email.Email, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file: %s", err)
 	}
+	defer file.Close()
 	mail, err := email.NewEmailFromReader(file)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse email: %s", err)
