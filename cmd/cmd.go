@@ -26,6 +26,7 @@ import (
 	"github.com/jordan-wright/email"
 	"github.com/schollz/progressbar/v3"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 )
 
 type EmailToEpub struct {
@@ -171,8 +172,7 @@ func (c *EmailToEpub) openEmail(eml string) (*email.Email, error) {
 
 func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 	downloads := make(map[string]string)
-
-	var group errgroup.Group
+	downloadLinks := make([]string, 0)
 	doc.Find("img").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
 		if !strings.HasPrefix(src, "http") {
@@ -196,15 +196,24 @@ func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 		localFile = filepath.Join(c.ImagesDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
 
 		downloads[src] = localFile
+		downloadLinks = append(downloadLinks, src)
+	})
 
+	var batch = semaphore.NewWeighted(3)
+	var group errgroup.Group
+
+	for i := range downloadLinks {
+		batch.Acquire(context.TODO(), 1)
+		src := downloadLinks[i]
 		group.Go(func() error {
-			err := c.download(localFile, src)
+			defer batch.Release(1)
+			err := c.download(downloads[src], src)
 			if err != nil {
 				log.Printf("download %s fail: %s", src, err)
 			}
 			return nil
 		})
-	})
+	}
 
 	_ = group.Wait()
 
