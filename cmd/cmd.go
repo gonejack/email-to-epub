@@ -184,10 +184,6 @@ func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 			return
 		}
 
-		if c.Verbose {
-			log.Printf("fetch %s", src)
-		}
-
 		uri, err := url.Parse(src)
 		if err != nil {
 			log.Printf("parse %s fail: %s", src, err)
@@ -203,14 +199,21 @@ func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 	var group errgroup.Group
 
 	for i := range downloadLinks {
-		batch.Acquire(context.TODO(), 1)
+		_ = batch.Acquire(context.TODO(), 1)
+
 		src := downloadLinks[i]
 		group.Go(func() error {
 			defer batch.Release(1)
+
+			if c.Verbose {
+				log.Printf("fetch %s", src)
+			}
+
 			err := c.download(downloads[src], src)
 			if err != nil {
 				log.Printf("download %s fail: %s", src, err)
 			}
+
 			return nil
 		})
 	}
