@@ -25,6 +25,7 @@ import (
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/jordan-wright/email"
 	"github.com/schollz/progressbar/v3"
+	"golang.org/x/sync/errgroup"
 )
 
 type EmailToEpub struct {
@@ -171,6 +172,7 @@ func (c *EmailToEpub) openEmail(eml string) (*email.Email, error) {
 func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 	downloads := make(map[string]string)
 
+	var group errgroup.Group
 	doc.Find("img").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
 		if !strings.HasPrefix(src, "http") {
@@ -179,7 +181,6 @@ func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 
 		localFile, exist := downloads[src]
 		if exist {
-			img.SetAttr("src", localFile)
 			return
 		}
 
@@ -194,14 +195,18 @@ func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 		}
 		localFile = filepath.Join(c.ImagesDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
 
-		err = c.download(localFile, src)
-		if err != nil {
-			log.Printf("download %s fail: %s", src, err)
-			return
-		}
-
 		downloads[src] = localFile
+
+		group.Go(func() error {
+			err := c.download(localFile, src)
+			if err != nil {
+				log.Printf("download %s fail: %s", src, err)
+			}
+			return nil
+		})
 	})
+
+	_ = group.Wait()
 
 	return downloads
 }
