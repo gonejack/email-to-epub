@@ -8,6 +8,9 @@ Command line tool for converting emails to epub.
 ```
 
 ### Usage
+```shell
+> email-to-epub *.eml
+```
 ```
 Usage:
   email-to-epub [-o output] [--title title] [--cover cover] *.eml
