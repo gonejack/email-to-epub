@@ -255,8 +255,8 @@ func (c *EmailToEpub) insertImages(eml string, doc *goquery.Document, attachment
 		if exist {
 			continue
 		} else {
-			index += 1
 			processed[localFile] = true
+			index += 1
 		}
 
 		// check mime
