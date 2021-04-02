@@ -89,7 +89,7 @@ func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
 			downloads := c.downloadImages(document)
 			document.Find("img").Each(func(i int, img *goquery.Selection) { c.changeRef(img, attachments, downloads) })
 		} else {
-			c.insertImages(document, attachments)
+			c.insertImages(eml, document, attachments)
 		}
 
 		info := c.mainInfo(mail)
@@ -246,7 +246,7 @@ func (c *EmailToEpub) extractAttachments(eml string, mail *email.Email) (attachm
 	}
 	return
 }
-func (c *EmailToEpub) insertImages(doc *goquery.Document, attachments map[string]string) {
+func (c *EmailToEpub) insertImages(eml string, doc *goquery.Document, attachments map[string]string) {
 	var processed = make(map[string]bool)
 
 	var index = 0
@@ -270,7 +270,7 @@ func (c *EmailToEpub) insertImages(doc *goquery.Document, attachments map[string
 		}
 
 		// add image
-		internalName := filepath.Base(fmt.Sprintf("attachment_%d", index))
+		internalName := filepath.Base(fmt.Sprintf("%s_attachment_%d", md5str(eml), index))
 		if !strings.HasSuffix(internalName, fmime.Extension()) {
 			internalName += fmime.Extension()
 		}
