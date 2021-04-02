@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime"
 	"net/http"
@@ -73,7 +74,7 @@ func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
 			return err
 		}
 
-		attachments, err := c.extractAttachments(mail)
+		attachments, err := c.extractAttachments(eml, mail)
 		if err != nil {
 			return fmt.Errorf("cannot extract attachments %s", err)
 		}
@@ -221,17 +222,17 @@ func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 
 	return downloads
 }
-func (c *EmailToEpub) extractAttachments(mail *email.Email) (attachments map[string]string, err error) {
+func (c *EmailToEpub) extractAttachments(eml string, mail *email.Email) (attachments map[string]string, err error) {
 	attachments = make(map[string]string)
-	for _, a := range mail.Attachments {
+	for i, a := range mail.Attachments {
 		if c.Verbose {
 			log.Printf("extract %s", a.Filename)
 		}
 
-		saveFile, err := os.CreateTemp(c.AttachmentsDir, "*"+filepath.Ext(a.Filename))
-		if err == nil {
-			_, err = saveFile.Write(a.Content)
-		}
+		saveFile := md5str(fmt.Sprintf("%s.%s.%d", filepath.Base(eml), mail.Subject, i))
+		saveFile = saveFile + filepath.Ext(a.Filename)
+		saveFile = filepath.Join(c.AttachmentsDir, saveFile)
+		err = ioutil.WriteFile(saveFile, a.Content, 0666)
 		if err != nil {
 			log.Printf("cannot extact image %s", a.Filename)
 			continue
@@ -239,8 +240,8 @@ func (c *EmailToEpub) extractAttachments(mail *email.Email) (attachments map[str
 		cid := a.Header.Get("Content-ID")
 		cid = strings.TrimPrefix(cid, "<")
 		cid = strings.TrimSuffix(cid, ">")
-		attachments[cid] = saveFile.Name()
-		attachments[a.Filename] = saveFile.Name()
+		attachments[cid] = saveFile
+		attachments[a.Filename] = saveFile
 	}
 	return
 }
