@@ -84,12 +84,13 @@ func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
-		document = c.cleanDoc(document)
-		downloads := c.downloadImages(document)
-
-		document.Find("img").Each(func(i int, img *goquery.Selection) {
-			c.changeRef(img, attachments, downloads)
-		})
+		if len(mail.HTML) > 0 {
+			document = c.cleanDoc(document)
+			downloads := c.downloadImages(document)
+			document.Find("img").Each(func(i int, img *goquery.Selection) { c.changeRef(img, attachments, downloads) })
+		} else {
+			c.insertImages(document, attachments)
+		}
 
 		info := c.mainInfo(mail)
 		body, err := document.Find("body").PrependHtml(info).Html()
@@ -244,6 +245,42 @@ func (c *EmailToEpub) extractAttachments(eml string, mail *email.Email) (attachm
 		attachments[a.Filename] = saveFile
 	}
 	return
+}
+func (c *EmailToEpub) insertImages(doc *goquery.Document, attachments map[string]string) {
+	var processed = make(map[string]bool)
+
+	var index = 0
+	for _, localFile := range attachments {
+		_, exist := processed[localFile]
+		if exist {
+			continue
+		} else {
+			index += 1
+			processed[localFile] = true
+		}
+
+		// check mime
+		fmime, err := mimetype.DetectFile(localFile)
+		if err != nil {
+			log.Printf("cannot detect image mime of %s: %s", localFile, err)
+			continue
+		}
+		if !strings.HasPrefix(fmime.String(), "image") {
+			continue
+		}
+
+		// add image
+		internalName := filepath.Base(fmt.Sprintf("attachment_%d", index))
+		if !strings.HasSuffix(internalName, fmime.Extension()) {
+			internalName += fmime.Extension()
+		}
+		internalRef, err := c.book.AddImage(localFile, internalName)
+		if err != nil {
+			log.Printf("cannot add image %s", err)
+			continue
+		}
+		doc.Find("body").AppendHtml(fmt.Sprintf(`<img src="%s" />`, internalRef))
+	}
 }
 func (c *EmailToEpub) changeRef(img *goquery.Selection, attachments, downloads map[string]string) {
 	img.RemoveAttr("loading")
