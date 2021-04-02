@@ -228,7 +228,7 @@ func (c *EmailToEpub) extractAttachments(mail *email.Email) (attachments map[str
 			log.Printf("extract %s", a.Filename)
 		}
 
-		saveFile, err := os.CreateTemp(c.AttachmentsDir, "*")
+		saveFile, err := os.CreateTemp(c.AttachmentsDir, "*"+filepath.Ext(a.Filename))
 		if err == nil {
 			_, err = saveFile.Write(a.Content)
 		}
