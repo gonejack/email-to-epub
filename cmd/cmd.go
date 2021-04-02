@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"io/ioutil"
 	"log"
 	"mime"
 	"net/http"
@@ -224,13 +223,15 @@ func (c *EmailToEpub) downloadImages(doc *goquery.Document) map[string]string {
 }
 func (c *EmailToEpub) extractAttachments(mail *email.Email) (attachments map[string]string, err error) {
 	attachments = make(map[string]string)
-	for i, a := range mail.Attachments {
+	for _, a := range mail.Attachments {
 		if c.Verbose {
 			log.Printf("extract %s", a.Filename)
 		}
 
-		saveFile := filepath.Join(c.AttachmentsDir, fmt.Sprintf("%d#%s", i, a.Filename))
-		err = ioutil.WriteFile(saveFile, a.Content, 0777)
+		saveFile, err := os.CreateTemp(c.AttachmentsDir, "*")
+		if err == nil {
+			_, err = saveFile.Write(a.Content)
+		}
 		if err != nil {
 			log.Printf("cannot extact image %s", a.Filename)
 			continue
@@ -238,8 +239,8 @@ func (c *EmailToEpub) extractAttachments(mail *email.Email) (attachments map[str
 		cid := a.Header.Get("Content-ID")
 		cid = strings.TrimPrefix(cid, "<")
 		cid = strings.TrimSuffix(cid, ">")
-		attachments[cid] = saveFile
-		attachments[a.Filename] = saveFile
+		attachments[cid] = saveFile.Name()
+		attachments[a.Filename] = saveFile.Name()
 	}
 	return
 }
