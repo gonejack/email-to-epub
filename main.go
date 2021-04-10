@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	_ "embed"
 
@@ -87,6 +88,10 @@ func run(c *cobra.Command, args []string) error {
 		Title:   *title,
 		Author:  *author,
 		Verbose: verbose,
+	}
+
+	if len(args) == 0 || args[0] == "*.eml" {
+		args, _ = filepath.Glob("*.eml")
 	}
 
 	return exec.Execute(args, *output)
