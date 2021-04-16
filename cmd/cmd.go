@@ -49,7 +49,7 @@ func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
 		return errors.New("no eml given")
 	}
 
-	err = c.mkdirs()
+	err = c.mkdir()
 	if err != nil {
 		return
 	}
@@ -114,7 +114,7 @@ func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
 	return nil
 }
 
-func (c *EmailToEpub) mkdirs() error {
+func (c *EmailToEpub) mkdir() error {
 	err := os.MkdirAll(c.ImagesDir, 0777)
 	if err != nil {
 		return fmt.Errorf("cannot make images dir %s", err)
