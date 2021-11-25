@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io/ioutil"
 	"log"
 	"mime"
 	"net/url"
@@ -210,7 +209,7 @@ func (c *EmailToEpub) extractAttachments(eml string, mail *email.Email) (attachm
 		saveFile := md5str(fmt.Sprintf("%s.%s.%d", filepath.Base(eml), mail.Subject, i))
 		saveFile = saveFile + filepath.Ext(a.Filename)
 		saveFile = filepath.Join(c.AttachmentsDir, saveFile)
-		err = ioutil.WriteFile(saveFile, a.Content, 0666)
+		err = os.WriteFile(saveFile, a.Content, 0666)
 		if err != nil {
 			log.Printf("cannot extact image %s", a.Filename)
 			continue
