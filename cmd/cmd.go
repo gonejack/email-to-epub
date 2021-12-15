@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"mime"
 	"net/url"
@@ -20,6 +21,8 @@ import (
 	"github.com/gonejack/email"
 	"github.com/gonejack/get"
 	"github.com/gonejack/go-epub"
+	"golang.org/x/text/encoding/htmlindex"
+	"golang.org/x/text/transform"
 )
 
 type EmailToEpub struct {
@@ -399,7 +402,16 @@ func decodeRFC2047(word string) (string, error) {
 		comps[3] = base64.StdEncoding.EncodeToString(text)
 	}
 
-	return new(mime.WordDecoder).DecodeHeader(strings.Join(comps, "?"))
+	wd := &mime.WordDecoder{
+		CharsetReader: func(charset string, input io.Reader) (io.Reader, error) {
+			enc, err := htmlindex.Get(charset)
+			if err != nil {
+				return nil, err
+			}
+			return transform.NewReader(input, enc.NewDecoder()), nil
+		},
+	}
+	return wd.DecodeHeader(strings.Join(comps, "?"))
 }
 func md5str(s string) string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(s)))
