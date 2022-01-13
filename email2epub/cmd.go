@@ -1,4 +1,4 @@
-package cmd
+package email2epub
 
 import (
 	"bytes"
@@ -26,43 +26,32 @@ import (
 )
 
 type EmailToEpub struct {
+	Options
 	DefaultCover []byte
-
-	ImagesDir      string
-	AttachmentsDir string
-
-	Cover   string
-	Title   string
-	Author  string
-	Verbose bool
 
 	book *epub.Epub
 }
 
-func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
-	if len(emails) == 0 {
+func (c *EmailToEpub) Run() (err error) {
+	_, exx := os.Stat(c.Output)
+	if !os.IsNotExist(exx) {
+		return fmt.Errorf("output file %s already exist", c.Output)
+	}
+	if len(c.EML) == 0 {
 		return errors.New("no eml given")
 	}
-
-	err = c.mkdir()
+	err = c.makeBook()
 	if err != nil {
 		return
 	}
+	return c.run()
+}
 
-	c.book = epub.NewEpub(c.Title)
-	{
-		c.setAuthor()
-		c.setDesc()
-		err = c.setCover()
-		if err != nil {
-			return
-		}
-	}
-
-	for i, eml := range emails {
+func (c *EmailToEpub) run() (err error) {
+	for i, eml := range c.EML {
 		index := i + 1
 
-		log.Printf("add %s", eml)
+		log.Printf("adding %s", eml)
 
 		mail, err := c.openEmail(eml)
 		if err != nil {
@@ -102,26 +91,17 @@ func (c *EmailToEpub) Execute(emails []string, output string) (err error) {
 			return fmt.Errorf("cannot add section %s", err)
 		}
 	}
-
-	err = c.book.Write(output)
+	err = c.book.Write(c.Output)
 	if err != nil {
 		return fmt.Errorf("cannot write output epub: %s", err)
 	}
-
-	return nil
+	return
 }
-
-func (c *EmailToEpub) mkdir() error {
-	err := os.MkdirAll(c.ImagesDir, 0777)
-	if err != nil {
-		return fmt.Errorf("cannot make images dir %s", err)
-	}
-	err = os.MkdirAll(c.AttachmentsDir, 0777)
-	if err != nil {
-		return fmt.Errorf("cannot make attachments dir %s", err)
-	}
-
-	return nil
+func (c *EmailToEpub) makeBook() (err error) {
+	c.book = epub.NewEpub(c.Title)
+	c.setAuthor()
+	c.setDesc()
+	return c.setCover()
 }
 func (c *EmailToEpub) setAuthor() {
 	c.book.SetAuthor(c.Author)
@@ -156,12 +136,13 @@ func (c *EmailToEpub) setCover() (err error) {
 	return
 }
 func (c *EmailToEpub) openEmail(eml string) (*email.Email, error) {
-	file, err := os.Open(eml)
+	fd, err := os.Open(eml)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file: %s", err)
 	}
-	defer file.Close()
-	mail, err := email.NewEmailFromReader(file)
+	defer fd.Close()
+
+	mail, err := email.NewEmailFromReader(fd)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse email: %s", err)
 	}
@@ -188,6 +169,7 @@ func (c *EmailToEpub) saveImages(doc *goquery.Document) map[string]string {
 			log.Printf("parse %s fail: %s", src, err)
 			return
 		}
+		_ = os.MkdirAll(c.ImagesDir, 0766)
 		localFile = filepath.Join(c.ImagesDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
 
 		tasks.Add(src, localFile)
@@ -212,7 +194,8 @@ func (c *EmailToEpub) extractAttachments(eml string, mail *email.Email) (attachm
 		saveFile := md5str(fmt.Sprintf("%s.%s.%d", filepath.Base(eml), mail.Subject, i))
 		saveFile = saveFile + filepath.Ext(a.Filename)
 		saveFile = filepath.Join(c.AttachmentsDir, saveFile)
-		err = os.WriteFile(saveFile, a.Content, 0666)
+		_ = os.MkdirAll(c.AttachmentsDir, 0766)
+		err = os.WriteFile(saveFile, a.Content, 0766)
 		if err != nil {
 			log.Printf("cannot extact image %s", a.Filename)
 			continue
