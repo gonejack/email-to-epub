@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/bmaupin/go-epub"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gonejack/email"
 	"github.com/gonejack/get"
-	"github.com/gonejack/go-epub"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 )
