@@ -60,12 +60,12 @@ func (c *EmailToEpub) run() (err error) {
 
 		attachments, err := c.extractAttachments(eml, mail)
 		if err != nil {
-			return fmt.Errorf("cannot extract attachments %s", err)
+			return fmt.Errorf("cannot extract attachments %w", err)
 		}
 
 		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(mail.HTML))
 		if err != nil {
-			return fmt.Errorf("cannot parse HTML: %s", err)
+			return fmt.Errorf("cannot parse HTML: %w", err)
 		}
 
 		if len(mail.HTML) > 0 {
@@ -81,19 +81,19 @@ func (c *EmailToEpub) run() (err error) {
 		info := c.renderInfo(mail)
 		body, err := doc.Find("body").PrependHtml(info).Html()
 		if err != nil {
-			return fmt.Errorf("cannot generate body: %s", err)
+			return fmt.Errorf("cannot generate body: %w", err)
 		}
 
 		title := fmt.Sprintf("%d. %s", index, c.renderTitle(mail))
 		filename := fmt.Sprintf("page%d.html", index)
 		_, err = c.book.AddSection(body, title, filename, "")
 		if err != nil {
-			return fmt.Errorf("cannot add section %s", err)
+			return fmt.Errorf("cannot add section %w", err)
 		}
 	}
 	err = c.book.Write(c.Output)
 	if err != nil {
-		return fmt.Errorf("cannot write output epub: %s", err)
+		return fmt.Errorf("cannot write output epub: %w", err)
 	}
 	return
 }
@@ -113,11 +113,11 @@ func (c *EmailToEpub) setCover() (err error) {
 	if c.Cover == "" {
 		temp, err := os.CreateTemp("", "email-to-epub")
 		if err != nil {
-			return fmt.Errorf("cannot create tempfile: %s", err)
+			return fmt.Errorf("cannot create tempfile: %w", err)
 		}
 		_, err = temp.Write(c.DefaultCover)
 		if err != nil {
-			return fmt.Errorf("cannot write tempfile: %s", err)
+			return fmt.Errorf("cannot write tempfile: %w", err)
 		}
 		_ = temp.Close()
 		c.Cover = temp.Name()
@@ -125,11 +125,11 @@ func (c *EmailToEpub) setCover() (err error) {
 
 	fmime, err := mimetype.DetectFile(c.Cover)
 	if err != nil {
-		return fmt.Errorf("cannot detect cover mime type %s", err)
+		return fmt.Errorf("cannot detect cover mime type %w", err)
 	}
 	coverRef, err := c.book.AddImage(c.Cover, "epub-cover"+fmime.Extension())
 	if err != nil {
-		return fmt.Errorf("cannot add cover %s", err)
+		return fmt.Errorf("cannot add cover %w", err)
 	}
 	c.book.SetCover(coverRef, "")
 
@@ -138,13 +138,13 @@ func (c *EmailToEpub) setCover() (err error) {
 func (c *EmailToEpub) openEmail(eml string) (*email.Email, error) {
 	fd, err := os.Open(eml)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open file: %s", err)
+		return nil, fmt.Errorf("cannot open file: %w", err)
 	}
 	defer fd.Close()
 
 	mail, err := email.NewEmailFromReader(fd)
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse email: %s", err)
+		return nil, fmt.Errorf("cannot parse email: %w", err)
 	}
 	return mail, nil
 }
